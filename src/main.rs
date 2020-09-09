@@ -1,11 +1,8 @@
-mod error;
-mod utils;
-mod gitc;
-mod gf;
-mod cli;
 
-use crate::cli::cli_run;
-use crate::error::Error;
+mod gitflow;
+
+use gitflow::cli::cli_run;
+use gitflow::error::Error;
 
 fn main() {
     // the main is a handler to all final results

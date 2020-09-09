@@ -1,13 +1,11 @@
 use std::path::PathBuf;
-use crate::gitc::{
-    GitcRepo,
-};
-
-use crate::utils::get_user_input;
-
-use crate::error::{
-    Error,
-    Result,
+use super::{
+    gitc::GitcRepo,
+    utils::get_user_input,
+    error::{
+        Error,
+        Result,
+    },
 };
 
 // also use it as the first command
