@@ -56,8 +56,7 @@ impl GitcRepo {
         let repo = Repository::open(&p);
         let repo = match repo {
             Ok(repo) => repo,
-            Err(e) => {
-                println!("{}, create a new one", e);
+            Err(_) => {
                 Repository::init(&p).unwrap()
             }
         };

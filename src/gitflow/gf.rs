@@ -9,8 +9,8 @@ use super::{
 };
 
 // also use it as the first command
-#[derive(Clone, Copy, PartialEq)]
-pub enum GfBranch {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum GFBranch {
     Feature,
     Bugfix,
     Hotfix,
@@ -18,21 +18,21 @@ pub enum GfBranch {
     Support,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum GfCmds {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum GFSubCmd {
     Init,
     Start,
     Finish,
 }
 
-pub struct GfWork {
-    pub cmd: Option<GfBranch>,
-    pub subcmd: Option<GfCmds>,
+pub struct GFWork {
+    pub cmd: Option<GFBranch>,
+    pub subcmd: Option<GFSubCmd>,
     pub repo: GitcRepo,
     pub branch_suffix: String, // passed by user
 }
 
-impl GfWork {
+impl GFWork {
     pub fn new(p: &PathBuf) -> Self {
         Self {
             cmd: None,
@@ -45,19 +45,19 @@ impl GfWork {
     fn get_branch_prefix(&self) -> Result<String> {
         if let Some(bp) = self.cmd {
             match bp {
-                GfBranch::Feature => {
+                GFBranch::Feature => {
                     Ok(self.repo.get_config("gitflow.prefix.feature")?)
                 }
-                GfBranch::Bugfix => {
+                GFBranch::Bugfix => {
                     Ok(self.repo.get_config("gitflow.prefix.bugfix")?)
                 }
-                GfBranch::Hotfix => {
+                GFBranch::Hotfix => {
                     Ok(self.repo.get_config("gitflow.prefix.hotfix")?)
                 }
-                GfBranch::Release => {
+                GFBranch::Release => {
                     Ok(self.repo.get_config("gitflow.prefix.release")?)
                 }
-                GfBranch::Support => {
+                GFBranch::Support => {
                     Ok(self.repo.get_config("gitflow.prefix.support")?)
                 }
             }
@@ -71,11 +71,11 @@ impl GfWork {
         self.branch_suffix = bs.to_string();
     }
 
-    pub fn set_cmd(&mut self, cmd: GfBranch) {
+    pub fn set_cmd(&mut self, cmd: GFBranch) {
         self.cmd = Some(cmd);
     }
 
-    pub fn set_subcmd(&mut self, subcmd: GfCmds) {
+    pub fn set_subcmd(&mut self, subcmd: GFSubCmd) {
         self.subcmd = Some(subcmd);
     }
 
@@ -93,7 +93,7 @@ impl GfWork {
         self.subconfig("Branch name for production releases: [master] ", "gitflow.branch.master", "master")?;
         self.subconfig("Branch name for \"next release\" development: [develop] ", "gitflow.branch.develop", "develop")?;
 
-        println!("How to name your supporting branch prefixes?");
+        println!("\nHow to name your supporting branch prefixes?");
         self.subconfig("Feature branches? [feature/]", "gitflow.prefix.feature", "feature/")?;
         self.subconfig("Bugfix branches? [bugfix/]", "gitflow.prefix.bugfix", "bugfix/")?;
         self.subconfig("Release branches? [release/]", "gitflow.prefix.release", "release/")?;
@@ -103,7 +103,7 @@ impl GfWork {
         self.subconfig("Version tag prefix? []", "gitflow.prefix.versiontag", "")?;
 
         let repodir = self.repo.get_workdir()?;
-        let hooksdir = format!("{}/.git/hooks", repodir.to_str().unwrap());
+        let hooksdir = format!("{}.git/hooks", repodir.to_str().unwrap());
         self.subconfig(&format!("Hooks and filters directory? [{}]", hooksdir), "gitflow.path.hooks", &hooksdir)?;
 
         Ok(())
@@ -115,33 +115,40 @@ impl GfWork {
     }
 
     // The main api to do git-flow works
-    pub fn work(&self) -> Result<()> {
+    pub fn work(&self, ) -> Result<()> {
         if self.subcmd.is_none() {
             return Err(Error::Generic(format!("No subcommand supplied to work")));
         }
-        if self.cmd.is_none() && self.subcmd.unwrap() != GfCmds::Init {
+        if self.cmd.is_none() && self.subcmd.unwrap() != GFSubCmd::Init {
             return Err(Error::Generic(format!("No branch_prefix supplied to work")));
         }
         match self.subcmd.unwrap() {
-            GfCmds::Init => {
+            GFSubCmd::Init => {
                 self.repo.init()?;
                 self.config()?;
+                // get develop branch name and create it
+                let branch = self.repo.get_config("gitflow.branch.develop")?;
+                self.repo.branch(&branch)?;
+                // then checkout it
+                self.repo.checkout(&branch)?;
+
                 Ok(())
             }
-            GfCmds::Start => {
+            GFSubCmd::Start => {
                 let branch = self.cat_gfbranch()?;
                 // create a new branch
                 self.repo.branch(&branch)?;
                 // and checkout it
                 self.repo.checkout(&branch)?;
+
                 Ok(())
             }
-            GfCmds::Finish => {
+            GFSubCmd::Finish => {
                 let branch = self.cat_gfbranch()?;
                 // checkout to related branch
                 // and merge
                 match self.cmd.unwrap() {
-                    GfBranch::Release | GfBranch::Hotfix => {
+                    GFBranch::Release | GFBranch::Hotfix => {
                         self.repo.checkout(&self.repo.get_config("gitflow.branch.master")?)?;
                         let refname = format!("refs/heads/{}", &branch);
                         let branch_ref = self.repo.0.find_reference(&refname)?;
