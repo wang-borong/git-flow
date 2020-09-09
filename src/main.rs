@@ -1,8 +1,7 @@
+extern crate git_flow;
 
-mod gitflow;
-
-use gitflow::cli::cli_run;
-use gitflow::error::Error;
+use git_flow::gitflow::cli::cli_run;
+use git_flow::gitflow::error::Error;
 
 fn main() {
     // the main is a handler to all final results
