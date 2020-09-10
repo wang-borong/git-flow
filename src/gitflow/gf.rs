@@ -8,6 +8,8 @@ use super::{
     },
 };
 
+use clap::ArgMatches;
+
 // also use it as the first command
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum GFBranch {
@@ -26,8 +28,6 @@ pub enum GFSubCmd {
 }
 
 pub struct GFWork {
-    pub cmd: Option<GFBranch>,
-    pub subcmd: Option<GFSubCmd>,
     pub repo: GitcRepo,
     pub branch_suffix: String, // passed by user
 }
@@ -35,48 +35,33 @@ pub struct GFWork {
 impl GFWork {
     pub fn new(p: &PathBuf) -> Self {
         Self {
-            cmd: None,
-            subcmd: None,
             repo: GitcRepo::new(p),
             branch_suffix: String::with_capacity(10),
         }
     }
 
-    fn get_branch_prefix(&self) -> Result<String> {
-        if let Some(bp) = self.cmd {
-            match bp {
-                GFBranch::Feature => {
-                    Ok(self.repo.get_config("gitflow.prefix.feature")?)
-                }
-                GFBranch::Bugfix => {
-                    Ok(self.repo.get_config("gitflow.prefix.bugfix")?)
-                }
-                GFBranch::Hotfix => {
-                    Ok(self.repo.get_config("gitflow.prefix.hotfix")?)
-                }
-                GFBranch::Release => {
-                    Ok(self.repo.get_config("gitflow.prefix.release")?)
-                }
-                GFBranch::Support => {
-                    Ok(self.repo.get_config("gitflow.prefix.support")?)
-                }
+    fn get_branch_prefix(&self, cmd: GFBranch) -> Result<String> {
+        match cmd {
+            GFBranch::Feature => {
+                Ok(self.repo.get_config("gitflow.prefix.feature")?)
             }
-        } else {
-            Err(Error::Generic("No cmd set to get branch prefix, set cmd firstly.".to_string()))
+            GFBranch::Bugfix => {
+                Ok(self.repo.get_config("gitflow.prefix.bugfix")?)
+            }
+            GFBranch::Hotfix => {
+                Ok(self.repo.get_config("gitflow.prefix.hotfix")?)
+            }
+            GFBranch::Release => {
+                Ok(self.repo.get_config("gitflow.prefix.release")?)
+            }
+            GFBranch::Support => {
+                Ok(self.repo.get_config("gitflow.prefix.support")?)
+            }
         }
-
     }
 
     pub fn set_branch_suffix(&mut self, bs: &str) {
         self.branch_suffix = bs.to_string();
-    }
-
-    pub fn set_cmd(&mut self, cmd: GFBranch) {
-        self.cmd = Some(cmd);
-    }
-
-    pub fn set_subcmd(&mut self, subcmd: GFSubCmd) {
-        self.subcmd = Some(subcmd);
     }
 
     fn subconfig(&self, prompt: &str, name: &str, default: &str) -> Result<()> {
@@ -109,90 +94,81 @@ impl GFWork {
         Ok(())
     }
 
-    fn cat_gfbranch(&self) -> Result<String> {
-        let branch_prefix = self.get_branch_prefix()?;
+    fn cat_gfbranch(&self, cmd: GFBranch) -> Result<String> {
+        let branch_prefix = self.get_branch_prefix(cmd)?;
         Ok(format!("{}{}", &branch_prefix, &self.branch_suffix))
     }
 
-    // The main api to do git-flow works
-    pub fn work(&self, ) -> Result<()> {
-        if self.subcmd.is_none() {
-            return Err(Error::Generic(format!("No subcommand supplied to work")));
-        }
-        if self.cmd.is_none() && self.subcmd.unwrap() != GFSubCmd::Init {
-            return Err(Error::Generic(format!("No branch_prefix supplied to work")));
-        }
-        match self.subcmd.unwrap() {
-            GFSubCmd::Init => {
-                self.repo.init()?;
-                self.config()?;
-                // get develop branch name and create it
-                let branch = self.repo.get_config("gitflow.branch.develop")?;
-                self.repo.branch(&branch)?;
-                // then checkout it
-                self.repo.checkout(&branch)?;
+    pub fn init(&self) -> Result<()> {
+        self.repo.init()?;
+        self.config()?;
+        // get develop branch name and create it
+        let branch = self.repo.get_config("gitflow.branch.develop")?;
+        self.repo.branch(&branch)?;
+        // then checkout it
+        self.repo.checkout(&branch)?;
 
-                Ok(())
-            }
-            GFSubCmd::Start => {
-                let branch = self.cat_gfbranch()?;
-                // create a new branch
-                self.repo.branch(&branch)?;
-                // and checkout it
-                self.repo.checkout(&branch)?;
+        Ok(())
+    }
 
-                Ok(())
-            }
-            GFSubCmd::Finish => {
-                let branch = self.cat_gfbranch()?;
-                // checkout to related branch
-                // and merge
-                match self.cmd.unwrap() {
-                    GFBranch::Release | GFBranch::Hotfix => {
-                        self.repo.checkout(&self.repo.get_config("gitflow.branch.master")?)?;
-                        let refname = format!("refs/heads/{}", &branch);
-                        let branch_ref = self.repo.0.find_reference(&refname)?;
-                        self.repo.merge(
-                            &self.repo.get_config("gitflow.branch.master")?,
-                            self.repo.0.reference_to_annotated_commit(&branch_ref)?,
-                            // TODO (too simple to get the merge message)
-                            &get_user_input("Input your merge message: ")?
-                        )?;
+    pub fn start(&self, cmd:GFBranch, fetch: bool) -> Result<()> {
+        let branch = self.cat_gfbranch(cmd)?;
+        // create a new branch
+        self.repo.branch(&branch)?;
+        // and checkout it
+        self.repo.checkout(&branch)?;
 
-                        // Give some tag message
-                        self.repo.tag(
-                            self.repo.0.refname_to_id(&format!("refs/heads/{}",
-                                    &self.repo.get_config("gitflow.branch.master")?))?,
-                            &get_user_input("Input a tag name")?,
-                        )?;
+        Ok(())
+    }
 
-                        self.repo.checkout(&self.repo.get_config("gitflow.branch.develop")?)?;
-                        let refname = format!("refs/heads/{}",
-                            &self.repo.get_config("gitflow.branch.master")?);
-                        let branch_ref = self.repo.0.find_reference(&refname)?;
-                        self.repo.merge(
-                            &self.repo.get_config("gitflow.branch.develop")?,
-                            self.repo.0.reference_to_annotated_commit(&branch_ref)?,
-                            &get_user_input("Input your merge message: ")?
-                        )?;
-                    },
-                    _ => {
-                        self.repo.checkout(&self.repo.get_config("gitflow.branch.develop")?)?;
-                        let refname = format!("refs/heads/{}", &branch);
-                        let branch_ref = self.repo.0.find_reference(&refname)?;
-                        self.repo.merge(
-                            &self.repo.get_config("gitflow.branch.develop")?,
-                            self.repo.0.reference_to_annotated_commit(&branch_ref)?,
-                            &get_user_input("Input your merge message: ")?
-                        )?;
-                    }
-                }
-                // then delete the git-flow branch
-                self.repo.delete_branch(&branch)?;
+    // Perhaps parse optional arguments here is ugly
+    pub fn finish(&self, cmd: GFBranch, opts_args: &ArgMatches) -> Result<()> {
+        let branch = self.cat_gfbranch(cmd)?;
+        // checkout to related branch
+        // and merge
+        match cmd {
+            GFBranch::Release | GFBranch::Hotfix => {
+                self.repo.checkout(&self.repo.get_config("gitflow.branch.master")?)?;
+                let refname = format!("refs/heads/{}", &branch);
+                let branch_ref = self.repo.0.find_reference(&refname)?;
+                self.repo.merge(
+                    &self.repo.get_config("gitflow.branch.master")?,
+                    self.repo.0.reference_to_annotated_commit(&branch_ref)?,
+                    // TODO (too simple to get the merge message)
+                    &get_user_input("Input your merge message: ")?
+                )?;
 
-                Ok(())
+                    // Give some tag message
+                self.repo.tag(
+                    self.repo.0.refname_to_id(&format!("refs/heads/{}",
+                            &self.repo.get_config("gitflow.branch.master")?))?,
+                    &get_user_input("Input a tag name")?,
+                )?;
+
+                    self.repo.checkout(&self.repo.get_config("gitflow.branch.develop")?)?;
+                    let refname = format!("refs/heads/{}",
+                        &self.repo.get_config("gitflow.branch.master")?);
+                    let branch_ref = self.repo.0.find_reference(&refname)?;
+                    self.repo.merge(
+                        &self.repo.get_config("gitflow.branch.develop")?,
+                        self.repo.0.reference_to_annotated_commit(&branch_ref)?,
+                        &get_user_input("Input your merge message: ")?
+                    )?;
+            },
+            _ => {
+                self.repo.checkout(&self.repo.get_config("gitflow.branch.develop")?)?;
+                let refname = format!("refs/heads/{}", &branch);
+                let branch_ref = self.repo.0.find_reference(&refname)?;
+                self.repo.merge(
+                    &self.repo.get_config("gitflow.branch.develop")?,
+                    self.repo.0.reference_to_annotated_commit(&branch_ref)?,
+                    &get_user_input("Input your merge message: ")?
+                )?;
             }
         }
+        // then delete the git-flow branch
+        self.repo.delete_branch(&branch)?;
+        Ok(())
     }
 }
 

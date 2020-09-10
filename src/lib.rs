@@ -20,7 +20,6 @@ use gitflow::{
     },
     gf::{
         GFBranch,
-        GFSubCmd,
         GFWork,
     },
 };
@@ -230,10 +229,9 @@ pub fn cli_run() -> Result<String> {
     // Init
     if let Some(matches) = matches.subcommand_matches("init") {
         let path = matches.value_of("init_path").unwrap_or(".");
-        let mut gfwork = GFWork::new(&PathBuf::from(path));
+        let gfwork = GFWork::new(&PathBuf::from(path));
 
-        gfwork.set_subcmd(GFSubCmd::Init);
-        gfwork.work()?;
+        gfwork.init()?;
 
         return Ok(format!("init {} success", path));
     }
@@ -248,21 +246,20 @@ pub fn cli_run() -> Result<String> {
     match matches.subcommand() {
         ("feature", feature_matches) => {
             // set command
-            gfwork.set_cmd(GFBranch::Feature);
             // set subcommand
             match feature_matches.unwrap().subcommand() {
                 ("start", feature_start_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Start);
                     // set branch suffix
                     gfwork.set_branch_suffix(
                         &feature_start_matches.unwrap()
                         .value_of("feature_name").unwrap());
+                    gfwork.start(GFBranch::Feature, false)?;
                 }
                 ("finish", feature_finish_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Finish);
                     gfwork.set_branch_suffix(
                         &feature_finish_matches.unwrap()
                         .value_of("feature_name").unwrap());
+                    gfwork.finish(GFBranch::Feature, feature_finish_matches.unwrap())?;
                 }
                 // ...
                 _ => {}
@@ -270,80 +267,76 @@ pub fn cli_run() -> Result<String> {
 
         }
         ("release", release_matches) => {
-            gfwork.set_cmd(GFBranch::Release);
             match release_matches.unwrap().subcommand() {
                 ("start", release_start_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Start);
                     // set branch suffix
                     gfwork.set_branch_suffix(
                         &release_start_matches.unwrap()
                         .value_of("release_name").unwrap());
+                    gfwork.start(GFBranch::Release, false)?;
                 }
                 ("finish", release_finish_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Finish);
                     gfwork.set_branch_suffix(
                         &release_finish_matches.unwrap()
                         .value_of("release_name").unwrap());
+                    gfwork.finish(GFBranch::Release, release_finish_matches.unwrap())?;
                 }
                 // ...
                 _ => {}
             }
         }
         ("bugfix", bugfix_matches) => {
-            gfwork.set_cmd(GFBranch::Bugfix);
             match bugfix_matches.unwrap().subcommand() {
                 ("start", bugfix_start_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Start);
                     // set branch suffix
                     gfwork.set_branch_suffix(
                         &bugfix_start_matches.unwrap()
                         .value_of("bugfix_name").unwrap());
+                    gfwork.start(GFBranch::Bugfix, false)?;
                 }
                 ("finish", bugfix_finish_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Finish);
                     gfwork.set_branch_suffix(
                         &bugfix_finish_matches.unwrap()
                         .value_of("bugfix_name").unwrap());
+                    gfwork.finish(GFBranch::Bugfix, bugfix_finish_matches.unwrap())?;
                 }
                 // ...
                 _ => {}
             }
         }
         ("hotfix", hotfix_matches) => {
-            gfwork.set_cmd(GFBranch::Hotfix);
             match hotfix_matches.unwrap().subcommand() {
                 ("start", hotfix_start_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Start);
                     // set branch suffix
                     gfwork.set_branch_suffix(
                         &hotfix_start_matches.unwrap()
                         .value_of("hotfix_name").unwrap());
+                    gfwork.start(GFBranch::Hotfix, false)?;
                 }
                 ("finish", hotfix_finish_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Finish);
                     gfwork.set_branch_suffix(
                         &hotfix_finish_matches.unwrap()
                         .value_of("hotfix_name").unwrap());
+                    gfwork.finish(GFBranch::Hotfix, hotfix_finish_matches.unwrap())?;
                 }
                 // ...
                 _ => {}
             }
         }
         ("support", support_matches) => {
-            gfwork.set_cmd(GFBranch::Support);
             match support_matches.unwrap().subcommand() {
                 ("start", support_start_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Start);
                     // set branch suffix
                     gfwork.set_branch_suffix(
                         &support_start_matches.unwrap()
                         .value_of("support_name").unwrap());
+                    gfwork.start(GFBranch::Support, false)?;
                 }
                 ("finish", support_finish_matches) => {
-                    gfwork.set_subcmd(GFSubCmd::Finish);
                     gfwork.set_branch_suffix(
                         &support_finish_matches.unwrap()
                         .value_of("support_name").unwrap());
+                    gfwork.finish(GFBranch::Support, support_finish_matches.unwrap())?;
                 }
                 // ...
                 _ => {}
@@ -353,8 +346,6 @@ pub fn cli_run() -> Result<String> {
         _ => {
         }
     }
-
-    gfwork.work()?;
 
     Ok(format!("run ... success"))
 
